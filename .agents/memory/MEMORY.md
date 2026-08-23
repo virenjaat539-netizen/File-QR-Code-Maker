@@ -1,0 +1,1 @@
+- [File sharing architecture](file-sharing-architecture.md) — QR codes should target served object URLs while bytes upload directly through signed storage URLs.

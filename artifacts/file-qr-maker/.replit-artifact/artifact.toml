@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "File QR Maker"
+description = "A simple file and image sharing website that turns uploaded files into shareable links and downloadable QR codes, so anyone can scan and open the file on any device."
+version = "1.0.0"
+id = "artifacts/file-qr-maker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19230
+
+[services.development]
+run = "pnpm --filter @workspace/file-qr-maker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/file-qr-maker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/file-qr-maker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19230"
+BASE_PATH = "/"

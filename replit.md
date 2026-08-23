@@ -1,6 +1,6 @@
-# [Project name]
+# File QR Maker
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+File QR Maker turns an uploaded image or file into a shareable public link and downloadable QR code.
 
 ## Run & Operate
 
@@ -22,15 +22,20 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/file-qr-maker/src/App.tsx` — upload, direct-to-storage flow, QR generation, and result UI
+- `artifacts/file-qr-maker/src/index.css` — Scanlight visual theme and motion
+- `artifacts/api-server/src/routes/storage.ts` — signed upload URL and object serving routes
+- `lib/api-spec/openapi.yaml` — upload URL API contract
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- File bytes upload directly to App Storage through a short-lived signed PUT URL; the API does not proxy file contents.
+- QR codes point to the app's `/api/storage/objects/...` URL so scans open the original file on any device.
+- Uploads are intentionally frictionless and do not require an account for this first version.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can drag and drop or select any non-empty file, see an image preview when applicable, upload it securely, generate a QR code, copy the share link, download the QR image, and start over.
 
 ## User preferences
 
@@ -38,7 +43,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run API codegen after changing `lib/api-spec/openapi.yaml`.
+- The web build needs `PORT` and `BASE_PATH` supplied by its managed workflow.
 
 ## Pointers
 
