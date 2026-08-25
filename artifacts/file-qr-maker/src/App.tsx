@@ -12,6 +12,7 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 const queryClient = new QueryClient();
 
 type FlowState = 'empty' | 'selected' | 'requesting' | 'uploading' | 'making-qr' | 'ready' | 'error';
+type InputMode = 'file' | 'internet';
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return '0 B';
@@ -59,7 +60,9 @@ function UploadProgress({ state, progress }: { state: FlowState; progress: numbe
 }
 
 function Home() {
+  const [inputMode, setInputMode] = useState<InputMode>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [internetUrl, setInternetUrl] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [qrData, setQrData] = useState('');
   const [servedUrl, setServedUrl] = useState('');
@@ -127,6 +130,33 @@ function Home() {
     setState('selected');
   }, []);
 
+  const useInternetImage = useCallback(async () => {
+    const value = internetUrl.trim();
+    if (!value) {
+      setError('Paste an image link first.');
+      setState('error');
+      return;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      setError('Please enter a complete image link starting with https://');
+      setState('error');
+      return;
+    }
+
+    setError('');
+    setCopied(false);
+    setSelectedFile(null);
+    setResult(null);
+    setProgress(0);
+    setQrData('');
+    setServedUrl(parsed.toString());
+    setState('making-qr');
+  }, [internetUrl]);
+
   const onFileInput = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     selectFile(event.target.files?.[0]);
     event.target.value = '';
@@ -188,7 +218,9 @@ function Home() {
   }, [servedUrl]);
 
   const startOver = useCallback(() => {
+    setInputMode('file');
     setSelectedFile(null);
+    setInternetUrl('');
     setResult(null);
     setServedUrl('');
     setQrData('');
@@ -200,6 +232,8 @@ function Home() {
 
   const isBusy = state === 'requesting' || state === 'uploading' || state === 'making-qr';
   const fileMeta = useMemo(() => selectedFile ? `${formatBytes(selectedFile.size)} · ${selectedFile.type || 'File'}` : '', [selectedFile]);
+  const resultName = result?.metadata.name || 'Internet image';
+  const resultSize = result ? formatBytes(result.metadata.size) : 'Online image';
 
   return (
     <main className="noise min-h-[100dvh] overflow-hidden bg-[hsl(var(--background))]">
@@ -239,6 +273,21 @@ function Home() {
           <div className="relative animate-rise [animation-delay:100ms]">
             <div className="absolute -right-7 -top-8 hidden h-24 w-24 rounded-full border border-dashed border-[hsl(var(--chart-4)/.55)] sm:block" />
             <div className="relative rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-lg)]">
+              <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-[hsl(var(--muted))] p-1">
+                <button type="button" onClick={() => { startOver(); setInputMode('file'); }} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${inputMode === 'file' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-mode-file">Upload a file</button>
+                <button type="button" onClick={() => { startOver(); setInputMode('internet'); }} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${inputMode === 'internet' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-mode-internet">Internet image</button>
+              </div>
+              {inputMode === 'internet' ? (
+                <div className="relative flex min-h-[305px] flex-col justify-center rounded-[17px] border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.54)] px-6 py-10">
+                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] text-[hsl(var(--accent))] shadow-[5px_5px_0_hsl(var(--chart-4)/.45)]"><Link2 className="h-6 w-6" /></div>
+                  <div className="text-[16px] font-extrabold text-[hsl(var(--foreground))]">Paste an image link</div>
+                  <div className="mt-1.5 text-[12px] leading-5 text-[hsl(var(--muted-foreground))]">Use the direct URL of any public image on the internet.</div>
+                  <input value={internetUrl} onChange={(event) => { setInternetUrl(event.target.value); setError(''); }} placeholder="https://example.com/photo.jpg" type="url" className="mt-5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-3 text-[12px] text-[hsl(var(--foreground))] outline-none transition placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--chart-4))] focus:ring-2 focus:ring-[hsl(var(--chart-4)/.2)]" data-testid="input-internet-image-url" />
+                  <button type="button" onClick={useInternetImage} disabled={state === 'making-qr'} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-5 py-3 text-[12px] font-bold text-[hsl(var(--primary-foreground))] shadow-[3px_3px_0_hsl(var(--chart-4))] transition hover:-translate-y-0.5 disabled:opacity-50" data-testid="button-create-internet-qr"><ScanLine className="h-4 w-4" /> Create QR from image</button>
+                  {state === 'error' && error && <div className="mt-3 flex items-start gap-2 rounded-xl border border-[hsl(var(--destructive)/.3)] bg-[hsl(var(--destructive)/.08)] p-3 text-[12px] leading-5 text-[hsl(var(--foreground))]" role="alert" data-testid="status-internet-error"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--destructive))]" />{error}</div>}
+                </div>
+              ) : (
+              <>
               <div
                 className={`relative flex min-h-[305px] flex-col items-center justify-center overflow-hidden rounded-[17px] border-2 border-dashed px-6 py-10 text-center transition-all duration-300 ${isDragging ? 'scale-[1.015] border-[hsl(var(--chart-4))] bg-[hsl(var(--accent)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/.54)]'} ${selectedFile ? 'min-h-[210px]' : ''}`}
                 onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
@@ -280,12 +329,14 @@ function Home() {
                   <button type="button" onClick={() => setError('')} className="rounded p-0.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" aria-label="Clear error" data-testid="button-clear-error"><X className="h-3.5 w-3.5" /></button>
                 </div>
               )}
+              </>
+              )}
             </div>
             <p className="mt-4 text-center font-mono text-[10px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">Files are uploaded securely · links are ready in seconds</p>
           </div>
         </section>
 
-        {state === 'ready' && qrData && result && (
+        {state === 'ready' && qrData && (result || servedUrl) && (
           <section className="animate-rise mt-14 grid gap-6 border-t border-[hsl(var(--border))] pt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:gap-14" data-testid="section-qr-result">
             <div className="flex flex-col justify-center">
               <div className="mb-4 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.18em] text-[hsl(var(--chart-4))]"><Check className="h-4 w-4" /> Your QR is ready</div>
@@ -297,7 +348,7 @@ function Home() {
                 <button type="button" onClick={copyLink} className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-[11px] font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--accent))]" data-testid="button-copy-link">{copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}{copied ? 'Copied' : 'Copy link'}</button>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <a href={qrData} download={`file-qr-${selectedFile?.name || 'code'}.png`} className="flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-[12px] font-extrabold text-[hsl(var(--primary-foreground))] shadow-[3px_3px_0_hsl(var(--chart-4))] transition hover:-translate-y-0.5" data-testid="link-download-qr"><Download className="h-4 w-4" /> Download QR</a>
+                <a href={qrData} download={`file-qr-${resultName}.png`} className="flex items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-3 text-[12px] font-extrabold text-[hsl(var(--primary-foreground))] shadow-[3px_3px_0_hsl(var(--chart-4))] transition hover:-translate-y-0.5" data-testid="link-download-qr"><Download className="h-4 w-4" /> Download QR</a>
                 <button type="button" onClick={startOver} className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-[12px] font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--secondary))]" data-testid="button-start-over"><RefreshCw className="h-4 w-4" /> Start over</button>
               </div>
             </div>
@@ -307,8 +358,8 @@ function Home() {
               <div className="relative rounded-[20px] bg-[hsl(var(--card))] p-4 shadow-[8px_8px_0_hsl(var(--chart-4)/.6)] sm:p-5">
                 <img src={qrData} alt={`QR code for ${selectedFile?.name || 'uploaded file'}`} className="block aspect-square w-[min(58vw,270px)]" data-testid="img-qr-code" />
                 <div className="mt-3 flex items-center justify-between gap-4 border-t border-[hsl(var(--border))] pt-3">
-                  <span className="max-w-[190px] truncate text-[10px] font-bold text-[hsl(var(--foreground))]" data-testid="text-qr-file-name">{result.metadata.name}</span>
-                  <span className="font-mono text-[9px] text-[hsl(var(--muted-foreground))]">{formatBytes(result.metadata.size)}</span>
+                  <span className="max-w-[190px] truncate text-[10px] font-bold text-[hsl(var(--foreground))]" data-testid="text-qr-file-name">{resultName}</span>
+                  <span className="font-mono text-[9px] text-[hsl(var(--muted-foreground))]">{resultSize}</span>
                 </div>
               </div>
               <div className="animate-scanline absolute left-5 right-5 top-1/2 h-px bg-[hsl(var(--accent)/.6)] shadow-[0_0_18px_hsl(var(--accent)/.55)]" />
