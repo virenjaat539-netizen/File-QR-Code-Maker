@@ -13,6 +13,16 @@ const queryClient = new QueryClient();
 
 type FlowState = 'empty' | 'selected' | 'requesting' | 'uploading' | 'making-qr' | 'ready' | 'error';
 type InputMode = 'file' | 'internet';
+type SavedScanner = {
+  id: string;
+  name: string;
+  url: string;
+  qrData: string;
+  kind: 'file' | 'internet';
+  createdAt: string;
+};
+
+const SAVED_SCANNERS_KEY = 'file-qr-maker:saved-scanners';
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return '0 B';
@@ -61,6 +71,14 @@ function UploadProgress({ state, progress }: { state: FlowState; progress: numbe
 
 function Home() {
   const [inputMode, setInputMode] = useState<InputMode>('file');
+  const [savedScanners, setSavedScanners] = useState<SavedScanner[]>(() => {
+    try {
+      const saved = window.localStorage.getItem(SAVED_SCANNERS_KEY);
+      return saved ? JSON.parse(saved) as SavedScanner[] : [];
+    } catch {
+      return [];
+    }
+  });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [internetUrl, setInternetUrl] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
@@ -102,6 +120,20 @@ function Home() {
     }).then((data) => {
       if (!cancelled) {
         setQrData(data);
+        setSavedScanners((current) => {
+          const existing = current.find((item) => item.url === servedUrl);
+          const scanner: SavedScanner = {
+            id: existing?.id || crypto.randomUUID(),
+            name: result?.metadata.name || selectedFile?.name || 'Internet image',
+            url: servedUrl,
+            qrData: data,
+            kind: result ? 'file' : 'internet',
+            createdAt: existing?.createdAt || new Date().toISOString(),
+          };
+          const next = [scanner, ...current.filter((item) => item.url !== servedUrl)].slice(0, 30);
+          window.localStorage.setItem(SAVED_SCANNERS_KEY, JSON.stringify(next));
+          return next;
+        });
         setState('ready');
       }
     }).catch(() => {
@@ -111,7 +143,7 @@ function Home() {
       }
     });
     return () => { cancelled = true; };
-  }, [servedUrl]);
+  }, [servedUrl, result, selectedFile]);
 
   const selectFile = useCallback((file?: File) => {
     if (!file) return;
@@ -234,6 +266,31 @@ function Home() {
     setError('');
     setCopied(false);
     setState('empty');
+  }, []);
+
+  const openSavedScanner = useCallback((scanner: SavedScanner) => {
+    setSelectedFile(null);
+    setResult(null);
+    setInputMode(scanner.kind);
+    setInternetUrl(scanner.kind === 'internet' ? scanner.url : '');
+    setServedUrl(scanner.url);
+    setQrData(scanner.qrData);
+    setError('');
+    setCopied(false);
+    setState('ready');
+  }, []);
+
+  const deleteSavedScanner = useCallback((id: string) => {
+    setSavedScanners((current) => {
+      const next = current.filter((item) => item.id !== id);
+      window.localStorage.setItem(SAVED_SCANNERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const clearSavedScanners = useCallback(() => {
+    setSavedScanners([]);
+    window.localStorage.removeItem(SAVED_SCANNERS_KEY);
   }, []);
 
   const isBusy = state === 'requesting' || state === 'uploading' || state === 'making-qr';
@@ -369,6 +426,36 @@ function Home() {
                 </div>
               </div>
               <div className="animate-scanline absolute left-5 right-5 top-1/2 h-px bg-[hsl(var(--accent)/.6)] shadow-[0_0_18px_hsl(var(--accent)/.55)]" />
+            </div>
+          </section>
+        )}
+
+        {savedScanners.length > 0 && (
+          <section className="mt-16 border-t border-[hsl(var(--border))] pt-9" data-testid="section-saved-scanners">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 font-mono text-[10px] font-medium uppercase tracking-[.18em] text-[hsl(var(--chart-4))]"><Link2 className="h-3.5 w-3.5" /> Saved scanners</div>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-[-.045em] text-[hsl(var(--foreground))]">Your QR library</h2>
+                <p className="mt-1 text-[12px] text-[hsl(var(--muted-foreground))]">Your previous QR codes stay saved in this browser.</p>
+              </div>
+              <button type="button" onClick={clearSavedScanners} className="rounded-lg px-3 py-2 text-[11px] font-bold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--destructive)/.08)] hover:text-[hsl(var(--destructive))]" data-testid="button-clear-saved-scanners">Clear all</button>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {savedScanners.map((scanner) => (
+                <article key={scanner.id} className="group flex items-center gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/.72)] p-3 transition hover:-translate-y-0.5 hover:bg-[hsl(var(--card))]" data-testid={`saved-scanner-${scanner.id}`}>
+                  <button type="button" onClick={() => openSavedScanner(scanner)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                    <img src={scanner.qrData} alt="" className="h-14 w-14 rounded-lg border border-[hsl(var(--border))] bg-white p-1" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[12px] font-extrabold text-[hsl(var(--foreground))]">{scanner.name}</span>
+                      <span className="mt-1 block font-mono text-[9px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{new Date(scanner.createdAt).toLocaleDateString()} · {scanner.kind === 'file' ? 'File' : 'Internet image'}</span>
+                    </span>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <a href={scanner.qrData} download={`file-qr-${scanner.name}.png`} className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]" aria-label={`Download QR for ${scanner.name}`}><Download className="h-3.5 w-3.5" /></a>
+                    <button type="button" onClick={() => deleteSavedScanner(scanner.id)} className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--destructive)/.08)] hover:text-[hsl(var(--destructive))]" aria-label={`Delete ${scanner.name}`}><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                </article>
+              ))}
             </div>
           </section>
         )}
