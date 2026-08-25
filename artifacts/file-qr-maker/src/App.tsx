@@ -157,6 +157,12 @@ function Home() {
     setState('making-qr');
   }, [internetUrl]);
 
+  const openImageSearch = useCallback(() => {
+    setInputMode('internet');
+    setError('');
+    window.open('https://www.google.com/search?tbm=isch', '_blank', 'noopener,noreferrer');
+  }, []);
+
   const onFileInput = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     selectFile(event.target.files?.[0]);
     event.target.value = '';
@@ -275,7 +281,7 @@ function Home() {
             <div className="relative rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 shadow-[var(--shadow-lg)]">
               <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-[hsl(var(--muted))] p-1">
                 <button type="button" onClick={() => { startOver(); setInputMode('file'); }} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${inputMode === 'file' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-mode-file">Upload a file</button>
-                <button type="button" onClick={() => { startOver(); setInputMode('internet'); }} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${inputMode === 'internet' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-mode-internet">Internet image</button>
+                <button type="button" onClick={() => { startOver(); openImageSearch(); }} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${inputMode === 'internet' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-mode-internet">Internet image <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>
               </div>
               {inputMode === 'internet' ? (
                 <div className="relative flex min-h-[305px] flex-col justify-center rounded-[17px] border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted)/.54)] px-6 py-10">
